@@ -1,0 +1,113 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECG Analysis</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .control-panel { margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px; }
+        select, button { padding: 8px; font-size: 16px; }
+        button { background: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background: #45a049; }
+        #ecgPlot { width: 100%; height: 500px; margin-top: 20px; }
+        .results { margin-top: 20px; }
+        .metric { margin: 10px 0; }
+        .metric-value { font-weight: bold; font-size: 18px; }
+        .class-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        .class-item { padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ECG Rhythm Analysis</h1>
+        
+        <div class="control-panel">
+            <h2>Analysis Controls</h2>
+            <select id="recordSelect">
+                {% for num in record_options %}
+                <option value="{{ num }}">Record {{ num }}</option>
+                {% endfor %}
+            </select>
+            <button id="analyzeBtn">Analyze ECG</button>
+        </div>
+        
+        <div class="results">
+            <h2>Results</h2>
+            <div class="metric">
+                <span>Prediction: </span>
+                <span class="metric-value" id="prediction">-</span>
+            </div>
+            <div class="metric">
+                <span>Confidence: </span>
+                <span class="metric-value" id="confidence">-</span>
+            </div>
+            <div class="metric">
+                <span>Priority: </span>
+                <span class="metric-value" id="priority">-</span>
+            </div>
+            <div class="metric">
+                <span>Heart Rate: </span>
+                <span class="metric-value" id="heartRate">-</span>
+            </div>
+            
+            <h3>Class Legend</h3>
+            <div class="class-legend">
+                {% for id, class_info in classes.items() %}
+                <div class="class-item" style="background-color: {{ class_info['color'] }}20; color: {{ class_info['color'] }};">
+                    {{ class_info['id'] }}: {{ class_info['name'] }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div id="ecgPlot"></div>
+    </div>
+
+    <script>
+        document.getElementById('analyzeBtn').addEventListener('click', function() {
+            const recordNum = document.getElementById('recordSelect').value;
+            
+            // Show loading state
+            document.getElementById('prediction').textContent = 'Analyzing...';
+            document.getElementById('confidence').textContent = '-';
+            document.getElementById('priority').textContent = '-';
+            document.getElementById('heartRate').textContent = '-';
+            
+            fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ record_num: recordNum }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                // Update metrics
+                document.getElementById('prediction').textContent = data.prediction;
+                document.getElementById('confidence').textContent = data.confidence.toFixed(1) + '%';
+                document.getElementById('priority').textContent = data.priority;
+                document.getElementById('heartRate').textContent = data.heart_rate.toFixed(1) + ' BPM';
+                
+                // Highlight prediction
+                const predictionColor = Object.values({{ classes|tojson|safe }})
+                    .find(c => c.id === data.class_id).color;
+                document.getElementById('prediction').style.color = predictionColor;
+                
+                // Render plot
+                Plotly.newPlot('ecgPlot', data.plot_data.data, data.plot_data.layout);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Analysis failed');
+            });
+        });
+    </script>
+</body>
+</html>
